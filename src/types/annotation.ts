@@ -138,3 +138,21 @@ export interface ToastMessage {
   text: string;
   tone: 'info' | 'success' | 'error';
 }
+
+export type AIProviderId = 'gemini' | 'openrouter' | 'nanogpt' | 'custom';
+
+export interface AIProviderSelection {
+  provider: AIProviderId;
+  model: string;
+}
+
+export interface AIProviderInfo {
+  id: AIProviderId;
+  name: string;
+  endpointDisplay: string;
+  configured: boolean;
+  requiredEnvVars: string[];
+  defaultModel: string;
+  recommendedModels: Array<{ id: string; label: string }>;
+}
+

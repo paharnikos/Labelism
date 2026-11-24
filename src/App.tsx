@@ -3,6 +3,8 @@ import { Loader2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import type {
   AICaptionResult,
   AIDetectionResult,
+  AIProviderId,
+  AIProviderSelection,
   Annotation,
   CaptionStyle,
   DatasetImage,
@@ -52,7 +54,19 @@ import BatchStudioModal, {
   type BatchImageMetaPatch,
   type BatchTab,
 } from './components/BatchStudioModal';
+import GoogleDriveModal, { type DriveModalTab } from './components/GoogleDriveModal';
+import AIProviderModal, {
+  AI_PROVIDER_LABELS,
+  DEFAULT_AI_SELECTION,
+} from './components/AIProviderModal';
 import type { CropOutputFormat, CropSaveMode } from './utils/crop';
+import type { User } from 'firebase/auth';
+import {
+  clearCachedAccessToken,
+  googleSignIn,
+  initAuth,
+  logout,
+} from './utils/googleDrive';
 
 const DEFAULT_DISPLAY_SETTINGS: ImageDisplaySettings = {
   brightness: 100,
@@ -63,6 +77,37 @@ const DEFAULT_DISPLAY_SETTINGS: ImageDisplaySettings = {
   showClassPrefix: true,
   showCrosshair: true,
 };
+
+const AI_PROVIDER_STORAGE_KEY = 'reticle_ai_provider_v1';
+const VALID_AI_PROVIDERS: ReadonlySet<AIProviderId> = new Set([
+  'gemini',
+  'openrouter',
+  'nanogpt',
+  'custom',
+]);
+
+function loadSavedAIProvider(): AIProviderSelection {
+  try {
+    const raw = window.localStorage.getItem(AI_PROVIDER_STORAGE_KEY);
+    if (!raw) return DEFAULT_AI_SELECTION;
+    const parsed = JSON.parse(raw) as Partial<AIProviderSelection>;
+    if (
+      parsed &&
+      typeof parsed.provider === 'string' &&
+      VALID_AI_PROVIDERS.has(parsed.provider as AIProviderId) &&
+      typeof parsed.model === 'string' &&
+      parsed.model.trim().length > 0
+    ) {
+      return {
+        provider: parsed.provider as AIProviderId,
+        model: parsed.model.trim(),
+      };
+    }
+  } catch {
+    // Fall back to default built-in Gemini selection
+  }
+  return DEFAULT_AI_SELECTION;
+}
 
 interface HistoryEntry {
   past: Annotation[][];
@@ -91,7 +136,9 @@ export default function App() {
 
   const [historyByImage, setHistoryByImage] = useState<Record<string, HistoryEntry>>({});
 
-  // AI state (Gemini 3.1 Flash Lite)
+  // AI state (Gemini, OpenRouter, NanoGPT, or Custom OpenAI-compatible)
+  const [aiSelection, setAiSelection] = useState<AIProviderSelection>(() => loadSavedAIProvider());
+  const [aiProviderModalOpen, setAiProviderModalOpen] = useState(false);
   const [aiDetecting, setAiDetecting] = useState(false);
   const [aiCaptioning, setAiCaptioning] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -107,6 +154,13 @@ export default function App() {
     selectedIds: string[];
     filteredIds: string[];
   }>({ open: false, tab: 'crop', selectedIds: [], filteredIds: [] });
+  const [driveModal, setDriveModal] = useState<{ open: boolean; tab: DriveModalTab }>({
+    open: false,
+    tab: 'browse',
+  });
+  const [driveUser, setDriveUser] = useState<User | null>(null);
+  const [needsDriveAuth, setNeedsDriveAuth] = useState(true);
+  const [isLoggingInDrive, setIsLoggingInDrive] = useState(false);
   const [pendingDeleteTax, setPendingDeleteTax] = useState<PendingTaxonomyDelete | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -885,7 +939,13 @@ export default function App() {
       const res = await fetch('/api/ai/detect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, mimeType, taxonomy }),
+        body: JSON.stringify({
+          imageBase64,
+          mimeType,
+          taxonomy,
+          provider: aiSelection.provider,
+          model: aiSelection.model,
+        }),
         signal: controller.signal,
       });
 
@@ -1015,7 +1075,15 @@ export default function App() {
         setAiDetecting(false);
       }
     }
-  }, [activeProject, activeImage, imageUrls, persistProject, handleCommitAnnotations, pushToast]);
+  }, [
+    activeProject,
+    activeImage,
+    imageUrls,
+    aiSelection,
+    persistProject,
+    handleCommitAnnotations,
+    pushToast,
+  ]);
 
   // AI Auto-Captioning (Gemini 3.1 Flash Lite with resilient fallback)
   const handleCancelAICaption = useCallback(() => {
@@ -1050,7 +1118,14 @@ export default function App() {
         const res = await fetch('/api/ai/caption', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, mimeType, style, existingLabels }),
+          body: JSON.stringify({
+            imageBase64,
+            mimeType,
+            style,
+            existingLabels,
+            provider: aiSelection.provider,
+            model: aiSelection.model,
+          }),
           signal: controller.signal,
         });
 
@@ -1098,7 +1173,21 @@ export default function App() {
         }
       }
     },
-    [activeProject, activeImage, imageUrls, pushToast]
+    [activeProject, activeImage, imageUrls, aiSelection, pushToast]
+  );
+
+  const handleSaveAIProvider = useCallback(
+    (next: AIProviderSelection) => {
+      setAiSelection(next);
+      setAiError(null);
+      try {
+        window.localStorage.setItem(AI_PROVIDER_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage errors in restricted environments
+      }
+      pushToast(`AI provider set to ${AI_PROVIDER_LABELS[next.provider]} (${next.model}).`, 'success');
+    },
+    [pushToast]
   );
 
   const handleApplyAICaptionDraft = useCallback(() => {
@@ -1137,6 +1226,103 @@ export default function App() {
     [activeProject, images, persistProject, pushToast]
   );
 
+  // Initialize Firebase Auth listener for Google Drive (in-memory token lifecycle)
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user) => {
+        setDriveUser(user);
+        setNeedsDriveAuth(false);
+      },
+      () => {
+        setDriveUser(null);
+        setNeedsDriveAuth(true);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    setIsLoggingInDrive(true);
+    try {
+      const result = await googleSignIn();
+      setDriveUser(result.user);
+      setNeedsDriveAuth(false);
+      pushToast(`Connected Google Drive (${result.user.email || result.user.displayName}).`, 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed.';
+      pushToast(msg, 'error');
+    } finally {
+      setIsLoggingInDrive(false);
+    }
+  }, [pushToast]);
+
+  const handleGoogleSignOut = useCallback(async () => {
+    await logout();
+    setDriveUser(null);
+    setNeedsDriveAuth(true);
+    pushToast('Signed out of Google Drive.', 'info');
+  }, [pushToast]);
+
+  const handleDriveAuthExpired = useCallback(() => {
+    clearCachedAccessToken();
+    setNeedsDriveAuth(true);
+    pushToast('Google Drive session expired. Please sign in with Google again.', 'info');
+  }, [pushToast]);
+
+  const handleImportDriveBlobs = useCallback(
+    async (
+      driveFiles: Array<{ name: string; mimeType: string; blob: Blob }>,
+      split: SplitType
+    ) => {
+      if (!activeProject || driveFiles.length === 0) return;
+      const added: DatasetImage[] = [];
+      const newUrls: Record<string, string> = {};
+      const now = Date.now();
+
+      for (const f of driveFiles) {
+        const id = generateId('img');
+        const url = URL.createObjectURL(f.blob);
+        try {
+          const dims = await readImageDimensions(url);
+          await saveImageBlob(id, f.blob);
+          objectUrlCacheRef.current[id] = url;
+          newUrls[id] = url;
+          added.push({
+            id,
+            projectId: activeProject.id,
+            fileName: f.name,
+            mimeType: f.mimeType || 'image/jpeg',
+            width: dims.width,
+            height: dims.height,
+            split,
+            status: 'unlabeled',
+            caption: '',
+            shortCaption: '',
+            tags: [],
+            annotations: [],
+            createdAt: now + added.length,
+            updatedAt: now + added.length,
+          });
+        } catch {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      if (added.length > 0) {
+        await saveDatasetImagesBulk(added);
+        setImages((prev) => [...prev, ...added]);
+        setImageUrls((prev) => ({ ...prev, ...newUrls }));
+        setActiveImageId(added[0].id);
+        setActiveTab('annotate');
+        pushToast(
+          `Imported ${added.length} image${added.length === 1 ? '' : 's'} from Google Drive.`,
+          'success'
+        );
+      }
+    },
+    [activeProject, pushToast]
+  );
+
   // Global Keyboard Shortcuts (Annotate workspace)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1145,7 +1331,9 @@ export default function App() {
         projectModalMode ||
         pendingDeleteTax ||
         cropModalOpen ||
-        batchStudio.open
+        batchStudio.open ||
+        driveModal.open ||
+        aiProviderModalOpen
       ) {
         return;
       }
@@ -1231,6 +1419,8 @@ export default function App() {
     pendingDeleteTax,
     cropModalOpen,
     batchStudio.open,
+    driveModal.open,
+    aiProviderModalOpen,
     activeProject,
     activeImage,
     activeImageIndex,
@@ -1271,6 +1461,8 @@ export default function App() {
         projects={projects}
         activeProject={activeProject}
         activeTab={activeTab}
+        driveConnected={Boolean(driveUser && !needsDriveAuth)}
+        aiSelection={aiSelection}
         onSelectTab={setActiveTab}
         onSelectProject={(projectId) => {
           const found = projects.find((p) => p.id === projectId);
@@ -1279,6 +1471,8 @@ export default function App() {
         onOpenNewProject={() => setProjectModalMode('create')}
         onOpenManageProject={() => setProjectModalMode('manage')}
         onTriggerImportImages={() => fileInputRef.current?.click()}
+        onOpenDrive={() => setDriveModal({ open: true, tab: 'browse' })}
+        onOpenAIProvider={() => setAiProviderModalOpen(true)}
       />
 
       {/* Active Workspace View */}
@@ -1361,6 +1555,7 @@ export default function App() {
             aiCaptioning={aiCaptioning}
             aiError={aiError}
             aiCaptionDraft={aiCaptionDraft}
+            aiSelection={aiSelection}
             onToggleCollapse={() => setInspectorCollapsed((v) => !v)}
             onSelectActiveTaxonomy={(classId, objectId) => {
               setActiveClassId(classId);
@@ -1381,6 +1576,7 @@ export default function App() {
             onApplyAICaptionDraft={handleApplyAICaptionDraft}
             onDismissAICaptionDraft={() => setAiCaptionDraft(null)}
             onClearAIError={() => setAiError(null)}
+            onOpenAIProvider={() => setAiProviderModalOpen(true)}
           />
         </div>
       )}
@@ -1403,6 +1599,7 @@ export default function App() {
           onOpenBatchStudio={(tab, selectedIds, filteredIds) =>
             setBatchStudio({ open: true, tab, selectedIds, filteredIds })
           }
+          onOpenDriveImport={() => setDriveModal({ open: true, tab: 'browse' })}
         />
       )}
 
@@ -1418,7 +1615,11 @@ export default function App() {
         <ExportView
           project={activeProject}
           images={images}
+          imageUrls={imageUrls}
           onImportAnnotationsJson={(raw) => void handleImportAnnotationsJson(raw)}
+          onOpenDriveBrowse={() => setDriveModal({ open: true, tab: 'browse' })}
+          onOpenDriveUpload={() => setDriveModal({ open: true, tab: 'upload' })}
+          onNotify={pushToast}
         />
       )}
 
@@ -1466,9 +1667,38 @@ export default function App() {
           filteredIds={batchStudio.filteredIds}
           imageUrls={imageUrls}
           classes={activeProject.classes}
+          aiSelection={aiSelection}
+          onOpenAIProvider={() => setAiProviderModalOpen(true)}
           onClose={() => setBatchStudio((prev) => ({ ...prev, open: false }))}
           onApplyMediaBatch={handleApplyMediaBatch}
           onApplyMetaBatch={handleApplyMetaBatch}
+        />
+      )}
+
+      {driveModal.open && (
+        <GoogleDriveModal
+          initialTab={driveModal.tab}
+          user={driveUser}
+          needsAuth={needsDriveAuth}
+          isLoggingIn={isLoggingInDrive}
+          project={activeProject}
+          images={images}
+          imageUrls={imageUrls}
+          onSignIn={handleGoogleSignIn}
+          onSignOut={handleGoogleSignOut}
+          onAuthExpired={handleDriveAuthExpired}
+          onImportDriveBlobs={handleImportDriveBlobs}
+          onImportAnnotationsJson={handleImportAnnotationsJson}
+          onNotify={pushToast}
+          onClose={() => setDriveModal((prev) => ({ ...prev, open: false }))}
+        />
+      )}
+
+      {aiProviderModalOpen && (
+        <AIProviderModal
+          selection={aiSelection}
+          onSaveSelection={handleSaveAIProvider}
+          onClose={() => setAiProviderModalOpen(false)}
         />
       )}
 

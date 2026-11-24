@@ -13,6 +13,7 @@ import {
   Maximize,
   Tags,
   FileText,
+  HardDrive,
 } from 'lucide-react';
 import type { DatasetImage, LabelClass, ReviewStatus, SplitType } from '../types/annotation';
 import type { BatchTab } from './BatchStudioModal';
@@ -29,6 +30,7 @@ interface DatasetGalleryProps {
   onAutoSplit: (trainPct: number, valPct: number, testPct: number) => void;
   onUploadFiles: (files: FileList) => void;
   onOpenBatchStudio: (tab: BatchTab, selectedIds: string[], filteredIds: string[]) => void;
+  onOpenDriveImport: () => void;
 }
 
 const STATUS_NAMES: Record<ReviewStatus, string> = {
@@ -50,6 +52,7 @@ export default function DatasetGallery({
   onAutoSplit,
   onUploadFiles,
   onOpenBatchStudio,
+  onOpenDriveImport,
 }: DatasetGalleryProps) {
   const [search, setSearch] = useState('');
   const [splitFilter, setSplitFilter] = useState<'all' | SplitType>('all');
@@ -149,6 +152,15 @@ export default function DatasetGallery({
           </div>
 
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onOpenDriveImport}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#12151B] hover:bg-[#181C24] border border-[#232834] text-xs font-medium text-[#E8ECF2] transition-colors whitespace-nowrap"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-[#38BDF8]" />
+              <span>Google Drive</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setSplitPanelOpen((v) => !v)}

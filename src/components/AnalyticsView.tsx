@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { BarChart3 } from 'lucide-react';
 import type { DatasetImage, LabelClass, ReviewStatus, SplitType } from '../types/annotation';
 import { resolveTaxonomy } from '../utils/geometry';
 
@@ -6,6 +7,12 @@ interface AnalyticsViewProps {
   projectName: string;
   images: DatasetImage[];
   classes: LabelClass[];
+}
+
+function formatPct(part: number, total: number): string {
+  if (!total) return '0%';
+  const raw = (part / total) * 100;
+  return `${raw % 1 === 0 ? raw.toFixed(0) : raw.toFixed(1)}%`;
 }
 
 export default function AnalyticsView({ projectName, images, classes }: AnalyticsViewProps) {
@@ -16,6 +23,9 @@ export default function AnalyticsView({ projectName, images, classes }: Analytic
       img.annotations.filter((a) => a.source !== 'ai_suggestion')
     );
     const totalImages = images.length;
+    const annotatedImages = images.filter(
+      (i) => i.annotations.some((a) => a.source !== 'ai_suggestion')
+    ).length;
     const captionedImages = images.filter((i) => i.caption.trim().length > 0).length;
     const verifiedImages = images.filter((i) => i.status === 'verified').length;
 
@@ -38,7 +48,11 @@ export default function AnalyticsView({ projectName, images, classes }: Analytic
       geomCounts[ann.type] += 1;
       const tax = resolveTaxonomy(classes, ann.classId, ann.objectId);
       const cRow = classCounts.get(ann.classId);
-      if (cRow) cRow.count += 1;
+      if (cRow) {
+        cRow.count += 1;
+      } else {
+        classCounts.set(ann.classId, { label: tax.className, color: tax.color, count: 1 });
+      }
       const oKey = `${ann.classId}::${ann.objectId}`;
       const oRow = objectCounts.get(oKey);
       if (oRow) {
@@ -60,8 +74,19 @@ export default function AnalyticsView({ projectName, images, classes }: Analytic
       statusCounts[img.status] += 1;
     }
 
+    const byClass = Array.from(classCounts.values()).sort((a, b) => b.count - a.count);
+    const byObject = Array.from(objectCounts.values()).sort((a, b) => b.count - a.count);
+    const topFiveClasses = byClass.filter((c) => c.count > 0).slice(0, 5);
+
+    const splitPercentages: Record<SplitType, number> = {
+      train: totalImages ? (splitCounts.train / totalImages) * 100 : 0,
+      val: totalImages ? (splitCounts.val / totalImages) * 100 : 0,
+      test: totalImages ? (splitCounts.test / totalImages) * 100 : 0,
+    };
+
     return {
       totalImages,
+      annotatedImages,
       totalAnnotations: manualAnns.length,
       captionedImages,
       verifiedImages,
@@ -70,9 +95,11 @@ export default function AnalyticsView({ projectName, images, classes }: Analytic
       avgPerImage: totalImages ? (manualAnns.length / totalImages).toFixed(1) : '0.0',
       geomCounts,
       splitCounts,
+      splitPercentages,
       statusCounts,
-      byClass: Array.from(classCounts.values()).sort((a, b) => b.count - a.count),
-      byObject: Array.from(objectCounts.values()).sort((a, b) => b.count - a.count),
+      byClass,
+      byObject,
+      topFiveClasses,
     };
   }, [images, classes]);
 
@@ -91,6 +118,161 @@ export default function AnalyticsView({ projectName, images, classes }: Analytic
             <span className="text-[#CBD5E1]">{projectName}</span>.
           </p>
         </div>
+
+        {/* Dataset Summary Card */}
+        <section
+          aria-label="Dataset Summary"
+          className="bg-[#12151B] border border-[#232834] rounded-lg overflow-hidden"
+        >
+          <div className="px-5 py-3 border-b border-[#232834] flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-[#38BDF8] shrink-0" />
+              <h2 className="text-xs font-semibold text-[#E8ECF2] tracking-tight">
+                Dataset Summary
+              </h2>
+            </div>
+            <span className="text-[11px] font-mono tabular-nums text-[#8B95A5]">
+              {stats.annotatedImages} / {stats.totalImages} images annotated
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#232834]">
+            {/* Section 1: Total Annotated Objects */}
+            <div className="lg:col-span-3 p-5 flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] font-medium text-[#8B95A5]">
+                  Total Annotated Objects
+                </div>
+                <div className="mt-2 text-3xl font-display font-semibold font-mono tabular-nums text-[#E8ECF2]">
+                  {stats.totalAnnotations.toLocaleString()}
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#232834]/70 space-y-1 text-[11px] font-mono tabular-nums text-[#8B95A5]">
+                <div className="flex items-center justify-between">
+                  <span>Avg / image</span>
+                  <span className="text-[#CBD5E1]">{stats.avgPerImage}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Active classes</span>
+                  <span className="text-[#CBD5E1]">
+                    {stats.byClass.filter((c) => c.count > 0).length} / {classes.length}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Split Percentages (train / val / test) */}
+            <div className="lg:col-span-4 p-5 flex flex-col justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-medium text-[#8B95A5]">
+                  Image Split Breakdown
+                </div>
+
+                {/* Stacked proportional bar */}
+                <div
+                  className="mt-3 h-2.5 w-full rounded-sm bg-[#0B0D10] overflow-hidden flex"
+                  aria-hidden="true"
+                >
+                  {stats.splitPercentages.train > 0 && (
+                    <div
+                      className="h-full bg-[#38BDF8] transition-all duration-300"
+                      style={{ width: `${stats.splitPercentages.train}%` }}
+                    />
+                  )}
+                  {stats.splitPercentages.val > 0 && (
+                    <div
+                      className="h-full bg-[#FBBF24] transition-all duration-300"
+                      style={{ width: `${stats.splitPercentages.val}%` }}
+                    />
+                  )}
+                  {stats.splitPercentages.test > 0 && (
+                    <div
+                      className="h-full bg-[#A78BFA] transition-all duration-300"
+                      style={{ width: `${stats.splitPercentages.test}%` }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                {(
+                  [
+                    { key: 'train' as SplitType, color: '#38BDF8' },
+                    { key: 'val' as SplitType, color: '#FBBF24' },
+                    { key: 'test' as SplitType, color: '#A78BFA' },
+                  ] as const
+                ).map(({ key, color }) => (
+                  <div
+                    key={key}
+                    className="bg-[#0B0D10] border border-[#232834] rounded-md px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#8B95A5]">
+                      <span
+                        className="w-2 h-2 rounded-xs shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span>{key}</span>
+                    </div>
+                    <div className="mt-1 text-base font-display font-semibold font-mono tabular-nums text-[#E8ECF2]">
+                      {formatPct(stats.splitCounts[key], stats.totalImages)}
+                    </div>
+                    <div className="text-[10px] font-mono tabular-nums text-[#64748B]">
+                      {stats.splitCounts[key]} img
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 3: Top 5 Most Frequently Annotated Classes */}
+            <div className="lg:col-span-5 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-medium text-[#8B95A5]">
+                  Top 5 Annotated Classes
+                </span>
+                <span className="text-[10px] font-mono text-[#64748B]">
+                  Count · Share
+                </span>
+              </div>
+
+              {stats.topFiveClasses.length === 0 ? (
+                <div className="py-5 text-center text-xs text-[#64748B] bg-[#0B0D10] border border-[#232834] rounded-md">
+                  No annotated objects yet.
+                </div>
+              ) : (
+                <ol className="space-y-2">
+                  {stats.topFiveClasses.map((cls, idx) => (
+                    <li
+                      key={cls.label}
+                      className="flex items-center justify-between gap-3 text-xs py-1 border-b border-[#232834]/60 last:border-0"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="w-4 text-[11px] font-mono tabular-nums text-[#64748B] shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <span
+                          className="w-2.5 h-2.5 rounded-xs shrink-0"
+                          style={{ backgroundColor: cls.color }}
+                        />
+                        <span className="text-[#E8ECF2] truncate font-medium">
+                          {cls.label}
+                        </span>
+                      </span>
+                      <span className="font-mono tabular-nums text-[#8B95A5] shrink-0">
+                        <strong className="text-[#E8ECF2] font-medium">
+                          {cls.count.toLocaleString()}
+                        </strong>{' '}
+                        <span className="text-[11px] text-[#64748B]">
+                          ({formatPct(cls.count, stats.totalAnnotations)})
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* 4-Column KPI Strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type {
   AICaptionResult,
+  AIProviderSelection,
   Annotation,
   CaptionStyle,
   DatasetImage,
@@ -26,6 +27,7 @@ import type {
   ReviewStatus,
   SplitType,
 } from '../types/annotation';
+import { AI_PROVIDER_LABELS, formatShortModelName } from './AIProviderModal';
 import {
   CLASS_PALETTE,
   deriveObjectColor,
@@ -48,6 +50,7 @@ interface InspectorPanelProps {
   aiCaptioning: boolean;
   aiError: string | null;
   aiCaptionDraft: AICaptionResult | null;
+  aiSelection: AIProviderSelection;
   onToggleCollapse: () => void;
   onSelectActiveTaxonomy: (classId: string, objectId: string) => void;
   onSelectAnnotation: (id: string | null) => void;
@@ -65,6 +68,7 @@ interface InspectorPanelProps {
   onApplyAICaptionDraft: () => void;
   onDismissAICaptionDraft: () => void;
   onClearAIError: () => void;
+  onOpenAIProvider: () => void;
 }
 
 const REVIEW_STATUSES: Array<{ id: ReviewStatus; label: string }> = [
@@ -99,6 +103,7 @@ export default function InspectorPanel({
   aiCaptioning,
   aiError,
   aiCaptionDraft,
+  aiSelection,
   onToggleCollapse,
   onSelectActiveTaxonomy,
   onSelectAnnotation,
@@ -116,6 +121,7 @@ export default function InspectorPanel({
   onApplyAICaptionDraft,
   onDismissAICaptionDraft,
   onClearAIError,
+  onOpenAIProvider,
 }: InspectorPanelProps) {
   const [tab, setTab] = useState<InspectorTab>('annotations');
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>('descriptive');
@@ -396,44 +402,64 @@ export default function InspectorPanel({
               </select>
             </div>
 
-            {/* AI Assist Controls (Gemini 3.1 Flash Lite) */}
-            <div className="pt-1 flex items-center gap-2">
-              {aiDetecting ? (
+            {/* AI Assist Controls */}
+            <div className="pt-1 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-[10px] text-[#8B95A5]">
+                <span className="truncate">
+                  AI:{' '}
+                  <span className="text-[#CBD5E1] font-medium">
+                    {AI_PROVIDER_LABELS[aiSelection.provider]}
+                  </span>{' '}
+                  <span className="font-mono text-[#8B95A5]">
+                    · {formatShortModelName(aiSelection)}
+                  </span>
+                </span>
                 <button
                   type="button"
-                  onClick={onCancelAIDetect}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#38BDF8]/40 text-xs font-medium text-[#E8ECF2] transition-colors whitespace-nowrap"
+                  onClick={onOpenAIProvider}
+                  className="text-[#38BDF8] hover:underline shrink-0"
                 >
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#38BDF8]" />
-                  <span>Detecting… Cancel</span>
+                  Switch
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={!image}
-                  onClick={onRunAIDetect}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#E8ECF2] disabled:opacity-45 transition-colors whitespace-nowrap"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-[#38BDF8]" />
-                  <span>Suggest Boxes</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                disabled={!image || aiCaptioning}
-                onClick={() => {
-                  setTab('captions');
-                  onRunAICaption(captionStyle);
-                }}
-                className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#CBD5E1] disabled:opacity-45 transition-colors whitespace-nowrap"
-              >
-                {aiCaptioning ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#38BDF8]" />
+              </div>
+              <div className="flex items-center gap-2">
+                {aiDetecting ? (
+                  <button
+                    type="button"
+                    onClick={onCancelAIDetect}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#38BDF8]/40 text-xs font-medium text-[#E8ECF2] transition-colors whitespace-nowrap"
+                  >
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#38BDF8]" />
+                    <span>Detecting… Cancel</span>
+                  </button>
                 ) : (
-                  <span>Auto-Caption</span>
+                  <button
+                    type="button"
+                    disabled={!image}
+                    onClick={onRunAIDetect}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#E8ECF2] disabled:opacity-45 transition-colors whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#38BDF8]" />
+                    <span>Suggest Boxes</span>
+                  </button>
                 )}
-              </button>
+
+                <button
+                  type="button"
+                  disabled={!image || aiCaptioning}
+                  onClick={() => {
+                    setTab('captions');
+                    onRunAICaption(captionStyle);
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#CBD5E1] disabled:opacity-45 transition-colors whitespace-nowrap"
+                >
+                  {aiCaptioning ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#38BDF8]" />
+                  ) : (
+                    <span>Auto-Caption</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -900,10 +926,17 @@ export default function InspectorPanel({
 
               {/* AI Auto-Caption Control */}
               <div className="space-y-2 pb-3 border-b border-[#232834]">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-[#8B95A5]">
-                    AI Caption Assist (Flash Lite)
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-[#8B95A5] truncate">
+                    AI Caption ({AI_PROVIDER_LABELS[aiSelection.provider]})
                   </span>
+                  <button
+                    type="button"
+                    onClick={onOpenAIProvider}
+                    className="text-[10px] text-[#38BDF8] hover:underline shrink-0"
+                  >
+                    Switch
+                  </button>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <select

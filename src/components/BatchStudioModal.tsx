@@ -13,11 +13,13 @@ import {
   Plus,
 } from 'lucide-react';
 import type {
+  AIProviderSelection,
   Annotation,
   CaptionStyle,
   DatasetImage,
   LabelClass,
 } from '../types/annotation';
+import { AI_PROVIDER_LABELS, formatShortModelName } from './AIProviderModal';
 import { clamp, prepareImageForAI, resolveTaxonomy } from '../utils/geometry';
 import {
   buildCroppedFileName,
@@ -63,6 +65,8 @@ interface BatchStudioModalProps {
   filteredIds: string[];
   imageUrls: Record<string, string>;
   classes: LabelClass[];
+  aiSelection: AIProviderSelection;
+  onOpenAIProvider: () => void;
   onClose: () => void;
   onApplyMediaBatch: (items: BatchImageMediaUpdate[], summaryMessage: string) => Promise<void>;
   onApplyMetaBatch: (patches: BatchImageMetaPatch[], summaryMessage?: string) => Promise<void>;
@@ -134,6 +138,8 @@ export default function BatchStudioModal({
   filteredIds,
   imageUrls,
   classes,
+  aiSelection,
+  onOpenAIProvider,
   onClose,
   onApplyMediaBatch,
   onApplyMetaBatch,
@@ -587,6 +593,8 @@ export default function BatchStudioModal({
                 mimeType,
                 style: aiStyle,
                 existingLabels,
+                provider: aiSelection.provider,
+                model: aiSelection.model,
               }),
               signal: controller.signal,
             });
@@ -1558,7 +1566,7 @@ export default function BatchStudioModal({
                         [
                           { id: 'template', title: 'Template / Prefix', sub: 'Set, prepend or append' },
                           { id: 'find_replace', title: 'Find & Replace', sub: 'Bulk edit text' },
-                          { id: 'ai', title: 'AI Auto-Caption', sub: 'Gemini Flash Lite' },
+                          { id: 'ai', title: 'AI Auto-Caption', sub: AI_PROVIDER_LABELS[aiSelection.provider] },
                           { id: 'clear', title: 'Clear Captions', sub: 'Reset caption fields' },
                         ] as const
                       ).map((m) => (
@@ -1712,9 +1720,22 @@ export default function BatchStudioModal({
                     {captionMode === 'ai' && (
                       <div className="p-4 rounded-md bg-[#0B0D10] border border-[#232834] space-y-3.5">
                         <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-[#CBD5E1] block">
-                            Caption Generation Style (Gemini Flash Lite)
-                          </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-[#CBD5E1] truncate">
+                              Caption Style ({AI_PROVIDER_LABELS[aiSelection.provider]} ·{' '}
+                              <span className="font-mono text-[#8B95A5]">
+                                {formatShortModelName(aiSelection)}
+                              </span>
+                              )
+                            </span>
+                            <button
+                              type="button"
+                              onClick={onOpenAIProvider}
+                              className="text-[11px] text-[#38BDF8] hover:underline shrink-0"
+                            >
+                              Switch Provider
+                            </button>
+                          </div>
                           <div className="grid grid-cols-3 gap-2">
                             {(
                               [
@@ -1941,7 +1962,7 @@ export default function BatchStudioModal({
                         resultCaption =
                           aiSkipExisting && img.caption.trim()
                             ? '(skipped — already captioned)'
-                            : 'Will be generated via Gemini Flash Lite...';
+                            : `Will be generated via ${AI_PROVIDER_LABELS[aiSelection.provider]} (${formatShortModelName(aiSelection)})...`;
                       } else if (captionMode === 'template') {
                         const r = interpolateCaptionTemplate(templateText, img, classes);
                         if (templateApplyMode === 'replace') resultCaption = r;

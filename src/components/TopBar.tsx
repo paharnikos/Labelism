@@ -1,16 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, FolderOpen, Upload, Settings2 } from 'lucide-react';
-import type { Project, ViewTab } from '../types/annotation';
+import { ChevronDown, Plus, FolderOpen, Upload, Settings2, HardDrive, Cpu } from 'lucide-react';
+import type { AIProviderSelection, Project, ViewTab } from '../types/annotation';
+import { AI_PROVIDER_LABELS } from './AIProviderModal';
 
 interface TopBarProps {
   projects: Project[];
   activeProject: Project;
   activeTab: ViewTab;
+  driveConnected: boolean;
+  aiSelection: AIProviderSelection;
   onSelectTab: (tab: ViewTab) => void;
   onSelectProject: (projectId: string) => void;
   onOpenNewProject: () => void;
   onOpenManageProject: () => void;
   onTriggerImportImages: () => void;
+  onOpenDrive: () => void;
+  onOpenAIProvider: () => void;
 }
 
 const NAV_ITEMS: Array<{ id: ViewTab; label: string }> = [
@@ -24,11 +29,15 @@ export default function TopBar({
   projects,
   activeProject,
   activeTab,
+  driveConnected,
+  aiSelection,
   onSelectTab,
   onSelectProject,
   onOpenNewProject,
   onOpenManageProject,
   onTriggerImportImages,
+  onOpenDrive,
+  onOpenAIProvider,
 }: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -156,8 +165,29 @@ export default function TopBar({
         })}
       </nav>
 
-      {/* Zone 3: Single Primary Action */}
-      <div className="flex items-center shrink-0">
+      {/* Zone 3: AI Provider, Google Drive & Local Import */}
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onOpenAIProvider}
+          title={`AI Vision Provider: ${AI_PROVIDER_LABELS[aiSelection.provider]} (${aiSelection.model})`}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#E8ECF2] transition-colors whitespace-nowrap shrink-0"
+        >
+          <Cpu className="w-3.5 h-3.5 text-[#38BDF8]" />
+          <span>{AI_PROVIDER_LABELS[aiSelection.provider]}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenDrive}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#181C24] hover:bg-[#232834] border border-[#232834] text-xs font-medium text-[#E8ECF2] transition-colors whitespace-nowrap shrink-0"
+        >
+          <HardDrive
+            className={`w-3.5 h-3.5 ${driveConnected ? 'text-[#22C55E]' : 'text-[#38BDF8]'}`}
+          />
+          <span>{driveConnected ? 'Google Drive' : 'Connect Drive'}</span>
+        </button>
+
         <button
           type="button"
           onClick={onTriggerImportImages}
