@@ -1,0 +1,6 @@
+{
+  "name": "Reticle",
+  "description": "Precision machine learning image annotation, polygon segmentation, polyline, and captioning studio with hierarchical Class → Object taxonomies, IndexedDB persistence, COCO/JSONL/CSV export, and Gemini 3.1 Flash Lite assistance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

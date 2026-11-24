@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-studio-bg: #0B0D10;
+  --color-studio-well: #07090C;
+  --color-studio-surface: #12151B;
+  --color-studio-elevated: #181C24;
+  --color-studio-border: #232834;
+  --color-studio-border-strong: #323949;
+  --color-studio-fg: #E8ECF2;
+  --color-studio-muted: #8B95A5;
+  --color-studio-accent: #38BDF8;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    background-color: var(--color-studio-bg);
+    color: var(--color-studio-fg);
+    font-family: var(--font-sans);
+    letter-spacing: 0.005em;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  button:not(:disabled),
+  select:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Precision thin scrollbars for dark studio panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B0D10;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232834;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #364053;
+}
+
+/* Subtle precision checkerboard for transparent image regions */
+.canvas-checker {
+  background-color: #07090C;
+  background-image:
+    linear-gradient(45deg, #0D1016 25%, transparent 25%),
+    linear-gradient(-45deg, #0D1016 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0D1016 75%),
+    linear-gradient(-45deg, transparent 75%, #0D1016 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
