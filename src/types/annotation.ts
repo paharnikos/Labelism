@@ -6,7 +6,7 @@ export type SplitType = 'train' | 'val' | 'test';
 
 export type ReviewStatus = 'unlabeled' | 'in_progress' | 'labeled' | 'verified';
 
-export type ViewTab = 'annotate' | 'dataset' | 'analytics' | 'export';
+export type ViewTab = 'annotate' | 'dataset' | 'analytics' | 'export' | 'help';
 
 export type CaptionStyle = 'descriptive' | 'concise' | 'technical';
 

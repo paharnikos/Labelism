@@ -45,6 +45,7 @@ import InspectorPanel from './components/InspectorPanel';
 import DatasetGallery from './components/DatasetGallery';
 import AnalyticsView from './components/AnalyticsView';
 import ExportView from './components/ExportView';
+import HelpView from './components/HelpView';
 import ProjectModal from './components/ProjectModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import DeleteTaxonomyModal, { type PendingTaxonomyDelete } from './components/DeleteTaxonomyModal';
@@ -1492,6 +1493,7 @@ export default function App() {
             }
             onResetDisplaySettings={() => setDisplaySettings(DEFAULT_DISPLAY_SETTINGS)}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            onOpenHelp={() => setActiveTab('help')}
             canCrop={Boolean(activeImage)}
             onOpenCrop={() => setCropModalOpen(true)}
           />
@@ -1607,7 +1609,12 @@ export default function App() {
         <AnalyticsView
           projectName={activeProject.name}
           images={images}
+          imageUrls={imageUrls}
           classes={activeProject.classes}
+          onOpenImage={(id) => {
+            handleSelectImage(id);
+            setActiveTab('annotate');
+          }}
         />
       )}
 
@@ -1620,6 +1627,15 @@ export default function App() {
           onOpenDriveBrowse={() => setDriveModal({ open: true, tab: 'browse' })}
           onOpenDriveUpload={() => setDriveModal({ open: true, tab: 'upload' })}
           onNotify={pushToast}
+        />
+      )}
+
+      {activeTab === 'help' && (
+        <HelpView
+          onNavigateTab={setActiveTab}
+          onOpenAIProvider={() => setAiProviderModalOpen(true)}
+          onOpenDrive={() => setDriveModal({ open: true, tab: 'browse' })}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
         />
       )}
 

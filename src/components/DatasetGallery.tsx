@@ -15,7 +15,13 @@ import {
   FileText,
   HardDrive,
 } from 'lucide-react';
-import type { DatasetImage, LabelClass, ReviewStatus, SplitType } from '../types/annotation';
+import type {
+  AnnotationType,
+  DatasetImage,
+  LabelClass,
+  ReviewStatus,
+  SplitType,
+} from '../types/annotation';
 import type { BatchTab } from './BatchStudioModal';
 
 interface DatasetGalleryProps {
@@ -58,6 +64,9 @@ export default function DatasetGallery({
   const [splitFilter, setSplitFilter] = useState<'all' | SplitType>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReviewStatus>('all');
   const [classFilter, setClassFilter] = useState<string>('all');
+  const [annotationTypeFilter, setAnnotationTypeFilter] = useState<
+    'all' | AnnotationType | 'none'
+  >('all');
   const [splitPanelOpen, setSplitPanelOpen] = useState(false);
   const [trainPct, setTrainPct] = useState(70);
   const [valPct, setValPct] = useState(20);
@@ -78,6 +87,18 @@ export default function DatasetGallery({
       ) {
         return false;
       }
+      if (annotationTypeFilter === 'none') {
+        if (img.annotations.some((a) => a.source !== 'ai_suggestion')) {
+          return false;
+        }
+      } else if (
+        annotationTypeFilter !== 'all' &&
+        !img.annotations.some(
+          (a) => a.type === annotationTypeFilter && a.source !== 'ai_suggestion'
+        )
+      ) {
+        return false;
+      }
       if (
         q &&
         !img.fileName.toLowerCase().includes(q) &&
@@ -88,7 +109,22 @@ export default function DatasetGallery({
       }
       return true;
     });
-  }, [images, search, splitFilter, statusFilter, classFilter]);
+  }, [images, search, splitFilter, statusFilter, classFilter, annotationTypeFilter]);
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    splitFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    classFilter !== 'all' ||
+    annotationTypeFilter !== 'all';
+
+  const resetFilters = () => {
+    setSearch('');
+    setSplitFilter('all');
+    setStatusFilter('all');
+    setClassFilter('all');
+    setAnnotationTypeFilter('all');
+  };
 
   const filteredIds = useMemo(() => filtered.map((i) => i.id), [filtered]);
   const validSelectedIds = useMemo(() => {
@@ -297,7 +333,7 @@ export default function DatasetGallery({
             value={classFilter}
             onChange={(e) => setClassFilter(e.target.value)}
             aria-label="Filter by parent class"
-            className="bg-[#12151B] border border-[#232834] rounded-md px-3 py-2 text-xs text-[#CBD5E1] outline-none"
+            className="bg-[#12151B] border border-[#232834] focus:border-[#38BDF8] rounded-md px-3 py-2 text-xs text-[#CBD5E1] outline-none"
           >
             <option value="all">All Classes</option>
             {classes.map((c) => (
@@ -305,6 +341,22 @@ export default function DatasetGallery({
                 Contains: {c.name}
               </option>
             ))}
+          </select>
+
+          <select
+            value={annotationTypeFilter}
+            onChange={(e) =>
+              setAnnotationTypeFilter(e.target.value as 'all' | AnnotationType | 'none')
+            }
+            aria-label="Filter by annotation type"
+            className="bg-[#12151B] border border-[#232834] focus:border-[#38BDF8] rounded-md px-3 py-2 text-xs text-[#CBD5E1] outline-none"
+          >
+            <option value="all">All Annotation Types</option>
+            <option value="bbox">Has: Bounding Box</option>
+            <option value="polygon">Has: Polygon</option>
+            <option value="polyline">Has: Polyline</option>
+            <option value="keypoint">Has: Keypoint</option>
+            <option value="none">No Annotations</option>
           </select>
         </div>
 
@@ -419,6 +471,15 @@ export default function DatasetGallery({
                 ? 'This project has no images yet. Drag and drop images anywhere here to upload.'
                 : 'No images match the current filter criteria.'}
             </p>
+            {images.length > 0 && hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="px-3 py-1.5 rounded-md bg-[#12151B] hover:bg-[#181C24] border border-[#232834] text-xs font-medium text-[#E8ECF2] transition-colors"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

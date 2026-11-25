@@ -23,6 +23,7 @@ const NAV_ITEMS: Array<{ id: ViewTab; label: string }> = [
   { id: 'dataset', label: 'Dataset' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'export', label: 'Export' },
+  { id: 'help', label: 'Help' },
 ];
 
 export default function TopBar({

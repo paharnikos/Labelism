@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   Tag,
   Keyboard,
+  HelpCircle,
   RotateCcw,
   Plus,
   Crop,
@@ -30,6 +31,7 @@ interface ToolRailProps {
   onChangeDisplaySettings: (next: Partial<ImageDisplaySettings>) => void;
   onResetDisplaySettings: () => void;
   onOpenShortcuts: () => void;
+  onOpenHelp: () => void;
   canCrop: boolean;
   onOpenCrop: () => void;
 }
@@ -60,6 +62,7 @@ export default function ToolRail({
   onChangeDisplaySettings,
   onResetDisplaySettings,
   onOpenShortcuts,
+  onOpenHelp,
   canCrop,
   onOpenCrop,
 }: ToolRailProps) {
@@ -213,6 +216,16 @@ export default function ToolRail({
           className="w-9 h-9 rounded-md flex items-center justify-center text-[#8B95A5] hover:text-[#E8ECF2] hover:bg-[#181C24] transition-colors"
         >
           <Keyboard className="w-[17px] h-[17px]" strokeWidth={1.75} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenHelp}
+          title="Help Guide & Documentation"
+          aria-label="Help Guide"
+          className="w-9 h-9 rounded-md flex items-center justify-center text-[#8B95A5] hover:text-[#E8ECF2] hover:bg-[#181C24] transition-colors"
+        >
+          <HelpCircle className="w-[17px] h-[17px]" strokeWidth={1.75} />
         </button>
 
         {adjustOpen && (
